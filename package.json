@@ -22,7 +22,7 @@
     "start:docker": "npm-run-all check:db update:tracker start:server",
     "start:env": "node scripts/start-env.js",
     "start:server": "node server.js",
-    "build:app": "next build --turbo",
+    "build:app": "npm_config_pm_on_fail=warn next build --webpack",
     "build:icons": "svgr ./src/assets --out-dir src/components/svg --typescript",
     "build:components": "node scripts/bump-components.js && tsup",
     "build:tracker": "npm-run-all check:tracker build:tracker:script build:tracker:types",
