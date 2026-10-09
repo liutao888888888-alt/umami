@@ -106,9 +106,14 @@ function getAudience(path: string): ApiAudience {
   }
 
   if (
-    ['/api/admin', '/api/config', '/api/dashboard', '/api/heartbeat', '/api/scripts'].some(
-      prefix => path === prefix || path.startsWith(`${prefix}/`),
-    )
+    [
+      '/api/admin',
+      '/api/config',
+      '/api/dashboard',
+      '/api/heartbeat',
+      '/api/scripts',
+      '/api/integrations',
+    ].some(prefix => path === prefix || path.startsWith(`${prefix}/`))
   ) {
     return 'internal';
   }
