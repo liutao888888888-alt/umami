@@ -28,3 +28,11 @@
 自定义文件位于 `src/app/(main)/overview`、`src/app/api/integrations`、`src/lib/integrations.ts`。导航入口在 SideNav/MobileNav。`api-url.ts` 将集成接口固定到本地应用服务，避免外部 API 网关接收凭证。升级上游时保留这些变更。
 
 验证：集成权限/脱敏/配置保留/日期范围/Cloudflare 汇总测试，以及生产 Next.js 构建。
+
+## Google 登录授权（无需服务账号密钥）
+
+组织政策禁止生成服务账号密钥时，可使用 Web 应用 OAuth 客户端。启用 Analytics Data API 和 Search Console API，配置 Google Auth Platform，再创建 Web 应用客户端。唯一的已授权重定向 URI 应为 `https://你的Umami域名/api/integrations/google/callback`。将下载的客户端 JSON 直接粘贴到管理员的接入设置并保存，点击「连接 Google」授权两项只读范围。不要把客户端密钥、授权码或刷新令牌提交到 GitHub。
+
+登录授权的范围由 Google 账号可读取的 Analytics / Search Console 资源决定；总览只查询已配置的网站 ID。刷新令牌与客户端密钥使用现有应用密钥加密保存，不回传给浏览器。授权发起要求管理员会话和匹配的应用 Origin；回调使用 10 分钟 HttpOnly/Secure/SameSite=Lax 加密 cookie、随机 state 和 PKCE，并重新验证管理员会话及客户端配置。未完成两项读取授权时不会保存连接。
+
+Google 外部应用处于 Testing 状态时，包含这些范围的刷新令牌通常在 7 天后失效，需要重新连接。长期自用应按 Google 的要求设置适当发布状态；OAuth 授权界面的权限和验证提示须由账号持有人审阅。

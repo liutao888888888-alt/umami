@@ -19,6 +19,7 @@ const siteSchema = z.object({
 export const integrationInput = z.object({
   sites: z.record(z.uuid(), siteSchema),
   googleServiceAccount: z.string().max(20000).optional(),
+  googleOAuthClient: z.string().max(20000).optional(),
   cloudflareToken: z
     .string()
     .trim()
@@ -30,6 +31,12 @@ type Credentials = { client_email: string; private_key: string; private_key_id?:
 export type IntegrationConfig = {
   sites: Record<string, z.infer<typeof siteSchema>>;
   google?: Credentials;
+  googleOAuth?: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    refreshToken?: string;
+  };
   cloudflareToken?: string;
 };
 export type SourceResult = {
@@ -49,7 +56,9 @@ export async function readIntegrationConfig(): Promise<IntegrationConfig> {
 export function publicIntegrationConfig(config: IntegrationConfig) {
   return {
     sites: config.sites,
-    googleConfigured: !!config.google,
+    googleConfigured: !!(config.google || config.googleOAuth?.refreshToken),
+    googleOAuthConfigured: !!config.googleOAuth,
+    googleOAuthConnected: !!config.googleOAuth?.refreshToken,
     googleEmail: config.google?.client_email || '',
     cloudflareConfigured: !!config.cloudflareToken,
   };
@@ -72,6 +81,44 @@ export function mergeIntegrationConfig(
     const key = createPrivateKey(raw.private_key);
     if (key.asymmetricKeyType !== 'rsa') throw new Error('invalid-key');
     next.google = { client_email: raw.client_email, private_key: raw.private_key };
+  }
+  if (input.googleOAuthClient?.trim()) {
+    const raw = JSON.parse(input.googleOAuthClient)?.web;
+    if (
+      !raw ||
+      typeof raw.client_secret !== 'string' ||
+      !raw.client_secret ||
+      typeof raw.client_id !== 'string' ||
+      !/^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(raw.client_id)
+    ) {
+      throw new Error('invalid-oauth-client');
+    }
+    const uris = raw.redirect_uris?.filter((uri: unknown) => {
+      try {
+        const u = new URL(uri as string);
+        return (
+          u.protocol === 'https:' &&
+          !u.username &&
+          !u.password &&
+          !u.search &&
+          !u.hash &&
+          u.pathname === '/api/integrations/google/callback'
+        );
+      } catch {
+        return false;
+      }
+    });
+    if (!Array.isArray(uris) || uris.length !== 1) throw new Error('invalid-redirect-uri');
+    next.googleOAuth = {
+      clientId: raw.client_id,
+      clientSecret: raw.client_secret,
+      redirectUri: uris[0],
+      ...(config.googleOAuth?.clientId === raw.client_id &&
+      config.googleOAuth?.clientSecret === raw.client_secret &&
+      config.googleOAuth?.redirectUri === uris[0]
+        ? { refreshToken: config.googleOAuth.refreshToken }
+        : {}),
+    };
   }
   if (input.cloudflareToken) next.cloudflareToken = input.cloudflareToken;
   return next;
@@ -102,7 +149,23 @@ async function requestJson(url: string, init: RequestInit): Promise<any> {
   return response.json();
 }
 
-async function googleToken(credentials: Credentials, scope: string) {
+async function googleToken(config: IntegrationConfig, scope: string) {
+  if (config.googleOAuth?.refreshToken) {
+    const { OAuth2Client } = await import('google-auth-library');
+    const c = config.googleOAuth;
+    const client = new OAuth2Client({
+      clientId: c.clientId,
+      clientSecret: c.clientSecret,
+      redirectUri: c.redirectUri,
+      transporterOptions: { timeout: 15000, retry: false },
+    });
+    client.setCredentials({ refresh_token: c.refreshToken });
+    const { token } = await client.getAccessToken();
+    if (!token) throw new ProviderError(401);
+    return token;
+  }
+  const credentials = config.google;
+  if (!credentials) throw new ProviderError(401);
   const now = Math.floor(Date.now() / 1000);
   const encode = (v: object) => Buffer.from(JSON.stringify(v)).toString('base64url');
   const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
@@ -164,11 +227,11 @@ export async function getExternalOverview(
   const site = config.sites[websiteId];
   const range = reportingRange(days);
   const [ga4, searchConsole, cloudflare] = await Promise.all([
-    !config.google || !site?.gaPropertyId
+    !(config.google || config.googleOAuth?.refreshToken) || !site?.gaPropertyId
       ? missing('填写 GA4 属性 ID 并连接 Google 只读账号。')
       : source(async () => {
           const token = await googleToken(
-            config.google,
+            config,
             'https://www.googleapis.com/auth/analytics.readonly',
           );
           const data = await requestJson(
@@ -199,11 +262,11 @@ export async function getExternalOverview(
             ),
           };
         }),
-    !config.google || !site?.searchConsoleSite
+    !(config.google || config.googleOAuth?.refreshToken) || !site?.searchConsoleSite
       ? missing('填写 Search Console 资源名称并连接 Google 只读账号。')
       : source(async () => {
           const token = await googleToken(
-            config.google,
+            config,
             'https://www.googleapis.com/auth/webmasters.readonly',
           );
           const url = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(site.searchConsoleSite)}/searchAnalytics/query`;

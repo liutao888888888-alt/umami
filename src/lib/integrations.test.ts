@@ -66,24 +66,22 @@ test('Cloudflare GraphQL authorization errors never expose provider response or 
 test('Cloudflare totals aggregate all returned days and distinguish empty authorized data', async () => {
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          data: {
-            viewer: {
-              zones: [
-                {
-                  httpRequests1dGroups: [
-                    { sum: { requests: 10, bytes: 20, cachedRequests: 8, threats: 1 } },
-                    { sum: { requests: 5, bytes: 10, cachedRequests: 2, threats: 0 } },
-                  ],
-                },
-              ],
-            },
+    vi.fn().mockResolvedValue(
+      Response.json({
+        data: {
+          viewer: {
+            zones: [
+              {
+                httpRequests1dGroups: [
+                  { sum: { requests: 10, bytes: 20, cachedRequests: 8, threats: 1 } },
+                  { sum: { requests: 5, bytes: 10, cachedRequests: 2, threats: 0 } },
+                ],
+              },
+            ],
           },
-        }),
-      ),
+        },
+      }),
+    ),
   );
   const result = await getExternalOverview(
     {
@@ -120,4 +118,39 @@ test('credential-provided token URLs are not retained and IDs cannot become arbi
   expect(
     integrationInput.safeParse({ sites: { [id]: { gaPropertyId: '../other' } } }).success,
   ).toBe(false);
+});
+
+test('OAuth credentials are redacted and replacing clients resets the prior grant', () => {
+  const client = {
+    client_id: '123-test.apps.googleusercontent.com',
+    client_secret: 'private-client-secret',
+    redirect_uris: ['https://umami.invalid/api/integrations/google/callback'],
+    token_uri: 'https://attacker.invalid',
+  };
+  const next = mergeIntegrationConfig(
+    { sites: {} },
+    { sites: {}, googleOAuthClient: JSON.stringify({ web: client }) },
+  );
+  next.googleOAuth!.refreshToken = 'private-refresh-token';
+  expect(JSON.stringify(publicIntegrationConfig(next))).not.toContain('private-');
+  expect(publicIntegrationConfig(next).googleOAuthConnected).toBe(true);
+  expect(next.googleOAuth).not.toHaveProperty('token_uri');
+  expect(
+    mergeIntegrationConfig(next, { sites: {}, googleOAuthClient: JSON.stringify({ web: client }) })
+      .googleOAuth!.refreshToken,
+  ).toBe('private-refresh-token');
+  expect(
+    mergeIntegrationConfig(next, {
+      sites: {},
+      googleOAuthClient: JSON.stringify({ web: { ...client, client_secret: 'replacement' } }),
+    }).googleOAuth!.refreshToken,
+  ).toBeUndefined();
+  expect(() =>
+    mergeIntegrationConfig(next, {
+      sites: {},
+      googleOAuthClient: JSON.stringify({
+        web: { ...client, redirect_uris: ['http://attacker.invalid/callback'] },
+      }),
+    }),
+  ).toThrow('invalid-redirect-uri');
 });

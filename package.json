@@ -96,6 +96,7 @@
     "detect-browser": "^5.2.0",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
+    "google-auth-library": "^11.2.0",
     "immer": "^11.1.18",
     "ipaddr.js": "^2.5.0",
     "is-ci": "^4.1.0",

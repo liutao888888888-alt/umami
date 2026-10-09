@@ -81,7 +81,9 @@ export async function POST(request: Request) {
   try {
     config = mergeIntegrationConfig(await readIntegrationConfig(), input);
   } catch {
-    return badRequest({ message: 'Google 凭证无效，请使用服务账号的 JSON 密钥文件。' });
+    return badRequest({
+      message: 'Google 凭证无效，请使用服务账号或 Web 应用 OAuth 客户端的 JSON 文件。',
+    });
   }
   try {
     const ids = Object.keys(config.sites);

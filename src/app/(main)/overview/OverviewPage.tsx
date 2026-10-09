@@ -21,6 +21,10 @@ export function OverviewPage() {
   const [notice, setNotice] = useState('');
   const [site, setSite] = useState(emptySite);
   const [google, setGoogle] = useState('');
+  const [oauthClient, setOAuthClient] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [googleResult, setGoogleResult] = useState('');
+  const [origin, setOrigin] = useState('');
   const [cloudflare, setCloudflare] = useState('');
   const config = useQuery({
     queryKey: ['integrations-config'],
@@ -34,6 +38,10 @@ export function OverviewPage() {
     staleTime: 300000,
     retry: false,
   });
+  useEffect(() => {
+    setGoogleResult(new URLSearchParams(window.location.search).get('google') || '');
+    setOrigin(window.location.origin);
+  }, []);
   useEffect(() => {
     if (!websiteId && config.data?.websites?.length) setWebsiteId(config.data.websites[0].id);
   }, [config.data, websiteId]);
@@ -50,9 +58,11 @@ export function OverviewPage() {
       await post('/integrations', {
         sites: { ...config.data.sites, [websiteId]: site },
         ...(google.trim() ? { googleServiceAccount: google.trim() } : {}),
+        ...(oauthClient.trim() ? { googleOAuthClient: oauthClient.trim() } : {}),
         ...(cloudflare.trim() ? { cloudflareToken: cloudflare.trim() } : {}),
       });
       setGoogle('');
+      setOAuthClient('');
       setCloudflare('');
       await config.refetch();
       await overview.refetch();
@@ -61,6 +71,20 @@ export function OverviewPage() {
       setNotice(error instanceof Error ? error.message : '保存失败，请重试。');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function connectGoogle() {
+    setConnecting(true);
+    setNotice('');
+    try {
+      const { url } = await post('/integrations/google', {});
+      const target = new URL(url);
+      if (target.origin !== 'https://accounts.google.com') throw new Error('授权地址无效。');
+      window.location.assign(target.href);
+    } catch {
+      setNotice('无法开始 Google 授权，请先保存客户端 JSON 并核对回调地址。');
+      setConnecting(false);
     }
   }
 
@@ -112,6 +136,15 @@ export function OverviewPage() {
       {config.isLoading && <p role="status">正在读取网站列表…</p>}
       {config.error && <p role="alert">无法读取接入设置，请重新登录或稍后刷新。</p>}
       {config.data?.websites?.length === 0 && <p>请先在「网站」中添加监控项目。</p>}
+      {googleResult && (
+        <p role="status">
+          {googleResult === 'connected'
+            ? 'Google 授权已连接，请核对下方平台数据。'
+            : googleResult === 'cancelled'
+              ? 'Google 授权已取消。'
+              : 'Google 授权未完成，请重新连接并勾选两项读取权限。'}
+        </p>
+      )}
       {setup && websiteId && (
         <section className={styles.setup}>
           <h2>连接 {selected?.domain}</h2>
@@ -124,9 +157,9 @@ export function OverviewPage() {
               <fieldset>
                 <legend>Google Analytics & Search Console</legend>
                 <p>
-                  在 Google Cloud 启用 Analytics Data API 和 Search Console API，创建一个不分配
-                  Cloud 项目角色的服务账号。将该账号邮箱分别添加为 GA4「查看者」和 Search
-                  Console「受限用户」，只授权需要监控的网站。
+                  在 Google Cloud 启用 Analytics Data API 和 Search Console API，创建 Web 应用 OAuth
+                  客户端。 保存客户端 JSON 后点击「连接 Google」，仅授权 Analytics 和 Search Console
+                  读取权限。 授权范围由 Google 账号可访问的资源决定；总览只查询这里填写的网站。
                 </p>
                 <label>
                   GA4 属性 ID
@@ -146,25 +179,66 @@ export function OverviewPage() {
                   />
                 </label>
                 <label>
-                  服务账号 JSON 密钥
+                  Google OAuth 客户端 JSON
                   <textarea
-                    value={google}
-                    onChange={e => setGoogle(e.target.value)}
+                    value={oauthClient}
+                    onChange={e => setOAuthClient(e.target.value)}
                     placeholder={
-                      config.data?.googleConfigured
-                        ? '已保存；仅在替换凭证时填写'
-                        : '粘贴 Google 下载的服务账号 JSON 文件内容'
+                      config.data?.googleOAuthConfigured
+                        ? '客户端已保存；仅在替换时填写'
+                        : '粘贴 Google 下载的 Web 应用客户端 JSON'
                     }
                     autoComplete="off"
                     spellCheck={false}
                     rows={4}
                   />
                 </label>
+                <small>回调地址：{origin}/api/integrations/google/callback</small>
+                <button
+                  type="button"
+                  disabled={!config.data?.googleOAuthConfigured || connecting}
+                  onClick={connectGoogle}
+                >
+                  {connecting
+                    ? '正在连接…'
+                    : config.data?.googleOAuthConnected
+                      ? '重新授权 Google'
+                      : '连接 Google'}
+                </button>
                 <small>
-                  {config.data?.googleConfigured
-                    ? `已保存 Google 账号：${config.data.googleEmail}`
-                    : 'Google 尚未连接。两站可以共用同一个只读服务账号。'}
+                  {config.data?.googleOAuthConnected
+                    ? 'Google 登录授权已连接。'
+                    : config.data?.googleOAuthConfigured
+                      ? '客户端已保存，等待 Google 登录授权。'
+                      : '请先保存 OAuth 客户端 JSON。'}
                 </small>
+                <details>
+                  <summary>使用服务账号（可选）</summary>
+                  <p>
+                    将服务账号邮箱添加为 GA4 查看者和 Search Console 受限用户，再填写其 JSON
+                    密钥。Google 登录授权已连接时优先使用登录授权。
+                  </p>
+                  <label>
+                    服务账号 JSON 密钥
+                    <textarea
+                      value={google}
+                      onChange={e => setGoogle(e.target.value)}
+                      placeholder={
+                        config.data?.googleConfigured
+                          ? '已保存；仅在替换凭证时填写'
+                          : '粘贴 Google 下载的服务账号 JSON 文件内容'
+                      }
+                      autoComplete="off"
+                      spellCheck={false}
+                      rows={4}
+                    />
+                  </label>
+                  <small>
+                    {config.data?.googleConfigured
+                      ? `已保存 Google 账号：${config.data.googleEmail}`
+                      : 'Google 尚未连接。两站可以共用同一个只读服务账号。'}
+                  </small>
+                </details>
               </fieldset>
               <fieldset>
                 <legend>Cloudflare</legend>
