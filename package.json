@@ -22,7 +22,7 @@
     "start:docker": "npm-run-all check:db update:tracker start:server",
     "start:env": "node scripts/start-env.js",
     "start:server": "node server.js",
-    "build:app": "esbuild next.config.ts --bundle --platform=node --format=esm --packages=external --outfile=next.config.mjs && pnpm_config_pm_on_fail=warn next build --webpack",
+    "build:app": "esbuild next.config.ts --bundle --platform=node --format=esm --packages=external --outfile=next.config.mjs && pnpm_config_pm_on_fail=warn next build --webpack && mkdir -p .next/standalone/node_modules/@swc && cp -aL node_modules/react node_modules/react-dom .next/standalone/node_modules/ && cp -aL node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers .next/standalone/node_modules/@swc/ && cp -aL node_modules/.pnpm/tslib@*/node_modules/tslib node_modules/.pnpm/scheduler@*/node_modules/scheduler .next/standalone/node_modules/",
     "build:icons": "svgr ./src/assets --out-dir src/components/svg --typescript",
     "build:components": "node scripts/bump-components.js && tsup",
     "build:tracker": "npm-run-all check:tracker build:tracker:script build:tracker:types",
