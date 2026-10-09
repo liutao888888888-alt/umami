@@ -301,7 +301,9 @@ for (const [name, content] of Object.entries(files)) {
   written.push(file);
 }
 
-await format(written);
+if (process.env.UMAMI_SKIP_FORMAT !== '1') {
+  await format(written);
+}
 
 if (check) {
   let stale = false;
