@@ -224,6 +224,7 @@ export default withNextIntl({
   },
   basePath,
   output: isVercel ? undefined : 'standalone',
+  outputFileTracingIncludes: { '/*': ['./supabase-ca.crt'] },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -259,3 +260,4 @@ export default withNextIntl({
     return [...redirects];
   },
 });
+
