@@ -15,7 +15,7 @@ import { IconLabel } from '@/components/common/IconLabel';
 import Link from '@/components/common/Link';
 import { OverlayScrollArea } from '@/components/common/OverlayScrollArea';
 import styles from '@/components/common/OverlayScrollArea.module.css';
-import { useGlobalState, useMessages, useNavigation } from '@/components/hooks';
+import { useGlobalState, useLoginQuery, useMessages, useNavigation } from '@/components/hooks';
 import {
   Globe,
   Grid2x2,
@@ -29,10 +29,14 @@ import { Logo } from '@/components/svg';
 
 export function SideNav(props: any) {
   const { t, labels } = useMessages();
+  const { user } = useLoginQuery();
   const { pathname, renderUrl, websiteId, teamId } = useNavigation();
   const [isCollapsed] = useGlobalState('sidenav-collapsed', false);
 
   const links = [
+    ...(user?.isAdmin
+      ? [{ id: 'overview', label: '网站总览', path: '/overview', icon: <LayoutDashboard /> }]
+      : []),
     ...(!teamId
       ? [
           {
@@ -138,7 +142,11 @@ export function SideNav(props: any) {
                 </Row>
               );
               return (
-                <Link key={id} href={renderUrl(path, false)} role="button">
+                <Link
+                  key={id}
+                  href={id === 'overview' ? path : renderUrl(path, false)}
+                  role="button"
+                >
                   {isCollapsed ? (
                     <TooltipTrigger delay={0}>
                       {content}

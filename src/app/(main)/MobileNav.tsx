@@ -2,7 +2,7 @@ import { Column, Grid, Row, Text } from '@umami/react-zen';
 import { WebsiteNav } from '@/app/(main)/websites/[websiteId]/WebsiteNav';
 import { IconLabel } from '@/components/common/IconLabel';
 import Link from '@/components/common/Link';
-import { useMessages, useNavigation } from '@/components/hooks';
+import { useLoginQuery, useMessages, useNavigation } from '@/components/hooks';
 import { Globe, Grid2x2, LayoutDashboard, LinkIcon } from '@/components/icons';
 import { MobileMenuButton } from '@/components/input/MobileMenuButton';
 import { UserButton } from '@/components/input/UserButton';
@@ -12,12 +12,16 @@ import { SettingsNav } from './settings/SettingsNav';
 
 export function MobileNav() {
   const { t, labels } = useMessages();
+  const { user } = useLoginQuery();
   const { pathname, websiteId, renderUrl } = useNavigation();
   const isAdmin = pathname.includes('/admin');
   const isSettings = pathname.includes('/settings');
   const isMain = !websiteId && !isAdmin && !isSettings;
 
   const links = [
+    ...(user?.isAdmin
+      ? [{ id: 'overview', label: '网站总览', path: '/overview', icon: <LayoutDashboard /> }]
+      : []),
     {
       id: 'boards',
       label: t(labels.boards),
@@ -54,7 +58,10 @@ export function MobileNav() {
                 links.map(link => {
                   return (
                     <Row key={link.id} padding>
-                      <Link href={renderUrl(link.path)} onClick={close}>
+                      <Link
+                        href={link.id === 'overview' ? link.path : renderUrl(link.path)}
+                        onClick={close}
+                      >
                         <IconLabel icon={link.icon} label={link.label} />
                       </Link>
                     </Row>

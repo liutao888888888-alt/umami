@@ -2,6 +2,11 @@ import { describe, expect, test } from 'vitest';
 import { getApiUrl } from './api-url';
 
 describe('getApiUrl', () => {
+  test('keeps integration credentials on the local server even with an external API gateway', () => {
+    expect(
+      getApiUrl('/integrations', { apiUrl: 'https://gateway.example/api', basePath: '/analytics' }),
+    ).toBe('/analytics/api/integrations');
+  });
   test('calls an absolute API_URL directly', () => {
     expect(
       getApiUrl('/websites', {
