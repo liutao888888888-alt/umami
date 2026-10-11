@@ -4,6 +4,7 @@ import Link from '@/components/common/Link';
 import { useApi, useLoginQuery } from '@/components/hooks';
 import type { SourceResult } from '@/lib/integrations';
 import styles from './OverviewPage.module.css';
+import { SeoPanel } from './SeoPanel';
 import { TrendsPanel } from './TrendsPanel';
 
 const emptySite = { gaPropertyId: '', searchConsoleSite: '', cloudflareZoneId: '' };
@@ -364,6 +365,8 @@ export function OverviewPage({ websiteId }: { websiteId: string }) {
         </>
       )}
       {!data && overview.isFetching && <p role="status">正在读取各平台数据…</p>}
+      {selected?.domain === 'zhodiao.com' &&
+        websiteId === 'c395acfd-518e-4689-9839-d46651e7320e' && <SeoPanel websiteId={websiteId} />}
       {selected && (
         <TrendsPanel
           key={`${user.id}:${websiteId}`}

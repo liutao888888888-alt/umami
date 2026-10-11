@@ -1,0 +1,33 @@
+# zhodiao 自动 SEO 优化试点
+
+入口：Websites → zhodiao → 网站总览 → SEO 自动优化。仅管理员会话可使用，站点 ID 固定为 c395acfd-518e-4689-9839-d46651e7320e，域名必须为 zhodiao.com。
+
+用户已选择自动修改 SEO 标题和摘要，其余修改人工审核；使用已有 DeepSeek。此版本只对已发布普通文章的 SEO 元数据自动生成及应用，不修改正文、H1、链接、URL、Canonical、Robots、Elementor 或文章发布排期。页面和技术问题展示人工审核任务及 WordPress 编辑入口。不是交接文档中全部阶段的实现。
+
+## 连接及权限
+
+Umami `/api/integrations/seo` 代理到固定 HTTPS WordPress `/wp-json/umami-seo/v1/bridge`。只支持状态、检查、暂停/开启、指定任务应用/拒绝/回滚。请求含时间、一次性 nonce、全正文 HMAC。时间差限制 60 秒，nonce 记忆 120 秒，拒绝重放或跨站。两端受保护配置文件 `~/.config/umami-zhodiao.key` 权限 600，不在 Git、前端或日志中。此文件允许应用调用 zhodiao 的限定操作，不具备 WordPress 通用管理员权限。
+
+DeepSeek 密钥留在现有 WordPress Publisher 设置中。只向现有 DeepSeek 服务发送公开文章标题、最多 6000 字正文和前台元数据，不发送 Umami 凭证、访客记录或私密内容。模型使用现有 Publisher 的配置，API 错误不回传原文。
+
+## 执行与恢复
+
+连接器 `connectors/zhodiao-seo-automation.php` 安装为 WordPress must-use 插件。状态、任务、四个 SEO 字段原值与是否存在、前后版本哈希和执行记录保存到 WordPress `zum_seo_state_v1` option，禁止加入 autoload。
+
+仅针对前台可访问、允许收录、Canonical 匹配且未使用 Elementor 的普通已发布文章。标题过短/过长、摘要缺失/过短/过长会成为候选；长度只是检查信号，不宣称 Google 有硬性长度要求。模型必须通过结构、长度、原标题相关性及承诺词检查。首版每轮最多三次 AI 生成，每 UTC 日最多三次应用，同页应用后至少 28 天不再建议。首页、其他页面及技术问题仅展示审核任务。
+
+每次应用先核对文章内容、状态、修改时间和原字段指纹，再重新检查前台、持久化不可变恢复快照，再修改 `_genesis_title`、`_genesis_description`、`zhodiao_seo_title`、`zhodiao_meta_description` 四个字段。检查实际 Title/Description、单一摘要、收录和 Canonical；失败暂停自动化。缓存按 post 清除。回滚仅恢复这四个字段，原本不存在的字段删除，指纹不一致时拒绝覆盖人工编辑。
+
+原子 option 锁保证单站执行串行；相同任务重复应用在状态检查阶段拒绝。执行中断遗留 executing 记录时暂停下一次运行，需运维核对页面和快照；不得盲目重试。快照和日志不自动删除。应将该 option 纳入网站数据库备份，连接密钥独立备份。当前没有独立异机快照库或完整故障恢复演练。
+
+## 调度及限制
+
+每天 01:00 UTC（北京时间 09:00）由 WordPress Cron 检查，暂停时不执行。每个任务通过单次 cron 逐页处理，任务中心每 15 秒刷新。低流量网站的 WordPress Cron 可能延迟，需 Hostinger 定时任务按期触发 wp-cron.php 才能保证准点；本插件不更改已有文章生成或发布 cron。
+
+本轮最多检查 100 个已发布文章/页面，不对未发布或私密内容进行分析。只读取限定域名，不跟随重定向，不扫描公网其他域名。读取失败显示原因，不当作零值或正常。
+
+此版本自动建议基于页面正文与真实前台元数据；GSC 页面级同步、趋势 CSV/API 数据评分、7/14/28 天定量效果报告、内链正文建议和多站点连接器尚未实现。现有 Umami/Trends 图表仍供人工核对。自动生成和成功写入不证明 SEO 收益。搜索结果可能重写标题与摘要。
+
+## 验证
+
+TypeScript API 测试覆盖管理员会话、跨站、跨源、字段限制、凭证错误脱敏和签名篡改。`connectors/seo-connector-test.php` 使用内存 WordPress 替身，覆盖备份先于写入、字段白名单、人工编辑冲突、备份失败拒绝应用、精确恢复字段缺失状态、回滚冲突、每日上限、签名和重放。测试不会写入真实页面。另需实际部署后核对站点状态、检查结果和前台验证。
