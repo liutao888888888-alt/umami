@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useApi, useLoginQuery } from '@/components/hooks';
 import Link from '@/components/common/Link';
+import { useApi, useLoginQuery } from '@/components/hooks';
 import type { SourceResult } from '@/lib/integrations';
 import styles from './OverviewPage.module.css';
+import { TrendsPanel } from './TrendsPanel';
 
 const emptySite = { gaPropertyId: '', searchConsoleSite: '', cloudflareZoneId: '' };
 const number = (v: number) =>
@@ -375,6 +376,15 @@ export function OverviewPage() {
         </>
       )}
       {!data && overview.isFetching && <p role="status">正在读取各平台数据…</p>}
+      {selected && (
+        <TrendsPanel
+          key={`${user.id}:${websiteId}`}
+          userId={user.id}
+          websiteId={websiteId}
+          domain={selected.domain}
+          rows={data?.searchConsole?.rows}
+        />
+      )}
     </main>
   );
 }

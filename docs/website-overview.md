@@ -36,3 +36,10 @@
 登录授权的范围由 Google 账号可读取的 Analytics / Search Console 资源决定；总览只查询已配置的网站 ID。刷新令牌与客户端密钥使用现有应用密钥加密保存，不回传给浏览器。授权发起要求管理员会话和匹配的应用 Origin；回调使用 10 分钟 HttpOnly/Secure/SameSite=Lax 加密 cookie、随机 state 和 PKCE，并重新验证管理员会话及客户端配置。未完成两项读取授权时不会保存连接。
 
 Google 外部应用处于 Testing 状态时，包含这些范围的刷新令牌通常在 7 天后失效，需要重新连接。长期自用应按 Google 的要求设置适当发布状态；OAuth 授权界面的权限和验证提示须由账号持有人审阅。
+# Google Trends keyword research
+
+The overview now includes an administrator-only Trends panel. It uses Google’s official cross-origin chart embeds (the iframe format from `embed_loader.js`), with a full-report fallback link. No third-party JavaScript executes in the Umami admin document, and no OAuth credentials or website IDs are included in Trends requests. A chart loads only after the administrator clicks Load / Update. Terms and region/time filters are then sent to Google.
+
+Compare one to five search terms, choose the market and a separate Trends period, view the time series and the first term’s related queries. Search Console query suggestions stay local until selected and loaded. Preferences are stored per administrator and website in this browser’s local storage, not shared across devices. Switching websites unmounts existing charts. No chart values are scraped or treated as absolute search volume, and no growth claims are inferred from the charts.
+
+The official Google Trends API remains an application-only alpha: https://developers.google.com/search/apis/trends. Existing Analytics/Search Console OAuth scopes do not grant Trends API access. This feature uses the official chart embedding option described at https://support.google.com/trends/answer/4365538. Automated data ingestion and quantitative trend scoring require a separately supported data source and are not part of this chart integration.
