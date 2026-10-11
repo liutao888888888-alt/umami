@@ -64,6 +64,7 @@ test('returns aggregate page visitors without session data, pinned to own websit
   const result = await (await GET(request())).json();
   expect(result.behavior.rows).toEqual([{ page: 'https://zhodiao.com/guide/', visitors: 4 }]);
   expect(mocks.metrics.mock.calls[0][0]).toBe(SEO_WEBSITE_ID);
+  expect(mocks.metrics.mock.calls[0][1].type).toBe('path');
   expect(result.search.status).toBe('connected');
   expect(result.search.rows).toEqual([]);
 });

@@ -390,7 +390,15 @@ export async function getZhodiaoSearchEvidence(config: IntegrationConfig) {
           position: row.position,
         })),
     };
-  } catch {
-    return { status: 'error', range, rows: [] };
+  } catch (error) {
+    const reason =
+      error instanceof ProviderError
+        ? `http-${error.status}`
+        : error instanceof z.ZodError
+          ? 'invalid-response'
+          : error instanceof TypeError
+            ? 'runtime-or-network'
+            : 'provider-request-failed';
+    return { status: 'error', reason, range, rows: [] };
   }
 }

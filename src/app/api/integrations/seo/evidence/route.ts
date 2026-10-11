@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     try {
       const rows = await getPageviewMetrics(
         SEO_WEBSITE_ID,
-        { type: 'url', limit: 1000 },
+        { type: 'path', limit: 1000 },
         {
           startDate: new Date(`${range.start}T00:00:00Z`),
           endDate: new Date(new Date(`${range.until}T00:00:00Z`).getTime() - 1),

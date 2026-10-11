@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { afterEach, expect, test, vi } from 'vitest';
 
 vi.mock('@/lib/prisma', () => ({ default: { client: {} } }));
@@ -14,7 +15,10 @@ import {
 } from './integrations';
 
 const id = 'c395acfd-518e-4689-9839-d46651e7320e';
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 test('date range uses complete UTC days across month and year boundaries', () => {
   expect(reportingRange(7, new Date('2026-01-02T23:50:00Z'))).toEqual({
@@ -168,4 +172,48 @@ test('SEO evidence refuses a different domain resource without contacting Google
   });
   expect(result.status).toBe('not-configured');
   expect(fetch).not.toHaveBeenCalled();
+});
+
+test('SEO page/query response accepts valid Google numbers and empty query results', async () => {
+  vi.spyOn(OAuth2Client.prototype, 'getAccessToken').mockResolvedValue({
+    token: 'test-access-token',
+    res: null,
+  });
+  const config = {
+    sites: {
+      [id]: { searchConsoleSite: 'https://zhodiao.com/', gaPropertyId: '', cloudflareZoneId: '' },
+    },
+    googleOAuth: {
+      clientId: 'test.apps.googleusercontent.com',
+      clientSecret: 'test-secret',
+      redirectUri: 'https://umami.invalid/callback',
+      refreshToken: 'test-refresh',
+    },
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          {
+            keys: ['https://zhodiao.com/beads/', 'bead guide'],
+            clicks: 0,
+            impressions: 4,
+            ctr: 0,
+            position: 6.8,
+          },
+        ],
+      }),
+    });
+  vi.stubGlobal('fetch', fetch);
+  const result = await getZhodiaoSearchEvidence(config);
+  expect(result.status).toBe('connected');
+  expect(result.rows[0]).toMatchObject({
+    page: 'https://zhodiao.com/beads/',
+    query: 'bead guide',
+    impressions: 4,
+  });
+  fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+  expect((await getZhodiaoSearchEvidence(config)).status).toBe('connected');
 });
