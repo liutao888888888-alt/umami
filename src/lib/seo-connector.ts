@@ -9,6 +9,20 @@ export const seoInput = z.discriminatedUnion('action', [
   z.object({ action: z.literal('status'), websiteId: z.literal(SEO_WEBSITE_ID) }),
   z.object({ action: z.literal('scan'), websiteId: z.literal(SEO_WEBSITE_ID) }),
   z.object({
+    action: z.literal('keywords'),
+    websiteId: z.literal(SEO_WEBSITE_ID),
+    keywords: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(2)
+          .max(100)
+          .regex(/^[^<>\r\n]+$/),
+      )
+      .max(20),
+  }),
+  z.object({
     action: z.literal('settings'),
     websiteId: z.literal(SEO_WEBSITE_ID),
     enabled: z.boolean(),

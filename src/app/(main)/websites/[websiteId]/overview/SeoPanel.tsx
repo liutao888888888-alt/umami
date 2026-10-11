@@ -14,6 +14,139 @@ const labels: Record<string, string> = {
   'rolled-back': '已回滚',
   'rollback-unverified': '回滚待核对',
 };
+const keywordLabels: Record<string, string> = {
+  insufficient: '样本不足，先观察',
+  'low-ctr': '优先检查标题和摘要',
+  'near-page-one': '审核正文与内链机会',
+  observe: '持续观察',
+};
+function KeywordAnalysis({
+  data,
+  busy,
+  save,
+}: {
+  data: any;
+  busy: boolean;
+  save: (keywords: string[]) => Promise<void>;
+}) {
+  const [terms, setTerms] = useState(data.targets.map((t: any) => t.query).join('\n'));
+  const [error, setError] = useState('');
+  const targets = terms
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+  const research = (term: string) =>
+    `https://trends.google.com/trends/explore?geo=US&date=today%2012-m&q=${encodeURIComponent(term)}`;
+  return (
+    <section aria-label="关键词分析">
+      <h3>关键词分析与选题</h3>
+      <p>
+        Search Console
+        提供本站真实曝光、点击率及平均位置，不代表全网搜索量或竞争难度。搜索数据覆盖所有国家；下方
+        Trends 研究链接默认美国。
+      </p>
+      <p>
+        分析范围：{data.range ? `${data.range.start} 至 ${data.range.end}` : '尚无数据'} ·{' '}
+        {data.status === 'connected' ? '已同步' : '数据不可用或已过期'} · 已过滤 {data.excluded}{' '}
+        条过长或含搜索操作符的噪声查询。
+      </p>
+      <p>
+        机会规则：至少 30 次曝光，平均位置前 10 且点击率低于 2% 时检查标题摘要；位置 11–20
+        时人工审核内容和内链。这些是筛选规则，不能单独判断标题有问题或承诺排名提升。
+      </p>
+      <div className={styles.tableWrap}>
+        <table>
+          <thead>
+            <tr>
+              <th>关键词 / 对应页面</th>
+              <th>曝光</th>
+              <th>点击</th>
+              <th>点击率</th>
+              <th>平均位置</th>
+              <th>建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r: any) => (
+              <tr key={`${r.query}:${r.page}`}>
+                <td>
+                  {r.query}
+                  <br />
+                  <a href={r.page} target="_blank" rel="noreferrer">
+                    {new URL(r.page).pathname}
+                  </a>
+                </td>
+                <td>{r.impressions}</td>
+                <td>{r.clicks}</td>
+                <td>{(r.ctr * 100).toFixed(1)}%</td>
+                <td>{r.position.toFixed(1)}</td>
+                <td>
+                  {keywordLabels[r.kind]}
+                  <br />
+                  <a href={research(r.query)} target="_blank" rel="noreferrer">
+                    研究美国趋势
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!data.rows.length && (
+        <p>
+          {data.status === 'connected'
+            ? '暂无可用于分析的有效查询。先设置目标词、研究搜索意图并积累曝光。'
+            : '请恢复搜索数据连接后再判断关键词表现。'}
+        </p>
+      )}
+      <label htmlFor="seo-keywords">目标关键词（每行一个，最多 20 个）</label>
+      <textarea
+        id="seo-keywords"
+        rows={6}
+        value={terms}
+        onChange={e => setTerms(e.target.value)}
+        style={{ width: '100%', padding: 12, marginTop: 8 }}
+      />
+      <div className={styles.toolbar}>
+        <button
+          disabled={busy}
+          onClick={async () => {
+            if (
+              targets.length > 20 ||
+              targets.some(t => t.length < 2 || t.length > 100 || /[<>]/.test(t))
+            ) {
+              setError('请使用 2–100 字的关键词，最多 20 个。');
+              return;
+            }
+            setError('');
+            await save([...new Set(targets)]);
+          }}
+        >
+          保存目标关键词
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      <p>
+        目标词用于选题和相关文章的 DeepSeek
+        建议。只有页面内容确实涉及该词时才采用；没有搜索证据时不会因为添加目标词而自动改页面。正文与内链仍由你审核。
+      </p>
+      <ul>
+        {data.targets.map((t: any) => (
+          <li key={t.query}>
+            {t.query} ·{' '}
+            {t.matches.length
+              ? `已有 ${t.matches.length} 个页面的查询证据`
+              : '暂无该词的本站搜索证据'}{' '}
+            ·{' '}
+            <a href={research(t.query)} target="_blank" rel="noreferrer">
+              研究美国趋势
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 export function SeoPanel({ websiteId }: { websiteId: string }) {
   const { get, post, useQuery } = useApi();
   const [busy, setBusy] = useState(false);
@@ -97,6 +230,13 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
                 : '本轮不可用'}
               。只保存汇总数据。
             </p>
+          )}
+          {data.keywords && (
+            <KeywordAnalysis
+              data={data.keywords}
+              busy={busy}
+              save={keywords => act('keywords', { keywords })}
+            />
           )}
           <h3>优化任务与修改记录</h3>
           {!data.tasks?.length && <p>暂无任务。完成检查后，会列出需要优化或审核的页面。</p>}

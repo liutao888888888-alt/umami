@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (request.headers.get('origin') !== 'https://darkorange-tiger-652673.hostingersite.com')
     return forbidden();
   const raw = await request.text();
-  if (Buffer.byteLength(raw) > 2000) return badRequest();
+  if (Buffer.byteLength(raw) > 10000) return badRequest();
   let input: z.infer<typeof seoInput>;
   try {
     input = seoInput.parse(JSON.parse(raw));

@@ -90,3 +90,21 @@ test('worker evidence signature is scoped and expires in 60 seconds', async () =
   expect(validSeoEvidenceSignature(request, key, now + 61000)).toBe(false);
   expect(validSeoEvidenceSignature(request, 'c'.repeat(64), now)).toBe(false);
 });
+
+test('validates bounded keyword settings and keeps existing site scope', async () => {
+  const body = {
+    action: 'keywords',
+    websiteId: SEO_WEBSITE_ID,
+    keywords: [' fuse bead patterns '],
+  };
+  expect((await POST(req(body))).status).toBe(200);
+  expect(mocks.connector).toHaveBeenCalledWith({ ...body, keywords: ['fuse bead patterns'] });
+  for (const keywords of [
+    Array(21).fill('beads'),
+    ['x'.repeat(101)],
+    ['<script>'],
+    ['bad\nterm'],
+  ]) {
+    expect((await POST(req({ ...body, keywords }))).status).toBe(400);
+  }
+});
