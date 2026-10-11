@@ -399,6 +399,19 @@ export async function getZhodiaoSearchEvidence(config: IntegrationConfig) {
           : error instanceof TypeError
             ? 'runtime-or-network'
             : 'provider-request-failed';
-    return { status: 'error', reason, range, rows: [] };
+    const fields =
+      error instanceof z.ZodError
+        ? [
+            ...new Set(
+              error.issues.map(issue => {
+                const field = issue.path.find(part => typeof part === 'string');
+                return ['keys', 'clicks', 'impressions', 'ctr', 'position'].includes(String(field))
+                  ? `${field}:${issue.code}`
+                  : `response:${issue.code}`;
+              }),
+            ),
+          ].slice(0, 6)
+        : [];
+    return { status: 'error', reason, fields, range, rows: [] };
   }
 }
