@@ -77,10 +77,27 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
             {data.nextRun ? new Date(data.nextRun).toLocaleString('zh-CN') : '尚未排期'}
           </p>
           <p>
-            建议依据页面正文和前台元数据检查。Search Console 尚未接入本模块的页面级证据；Trends
+            建议依据页面正文、前台检查及有效的站点分析证据。Trends
             图表用于人工研究，不作为自动发布评分。没有数据时不估算搜索量或排名收益。
           </p>
           {data.lastError && <p role="alert">{data.lastError}</p>}
+          <p>
+            每天北京时间 09:00 开始检查，后台每 5 分钟分批处理排队页面；完成时间取决于页面数量。
+          </p>
+          {data.evidence && (
+            <p>
+              分析证据更新时间：{new Date(data.evidence.fetchedAt).toLocaleString('zh-CN')} · Search
+              Console：
+              {data.evidence.searchStatus === 'connected'
+                ? `已读取 ${data.evidence.searchRows} 行页面与查询数据`
+                : '本轮不可用'}{' '}
+              · Umami：
+              {data.evidence.behaviorStatus === 'connected'
+                ? `已读取 ${data.evidence.behaviorRows} 页访客统计`
+                : '本轮不可用'}
+              。只保存汇总数据。
+            </p>
+          )}
           <h3>优化任务与修改记录</h3>
           {!data.tasks?.length && <p>暂无任务。完成检查后，会列出需要优化或审核的页面。</p>}
           {data.tasks?.map((t: any) => (
@@ -98,6 +115,13 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
                 · {new Date(t.createdAt).toLocaleString('zh-CN')}
               </p>
               <p>检查依据：{t.issues.join('；')}</p>
+              {t.evidence && (
+                <p>
+                  该页搜索查询证据：{t.evidence.search.length} 行 · Umami 访客：
+                  {t.evidence.behavior?.visitors ?? '暂无该页数据'}。
+                  {!t.evidence.search.length && '搜索证据不足，建议仅依据现有页面。'}
+                </p>
+              )}
               <p>
                 原标题：{t.before.title}
                 <br />

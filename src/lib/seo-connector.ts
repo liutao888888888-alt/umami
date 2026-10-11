@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -22,9 +22,27 @@ export const seoInput = z.discriminatedUnion('action', [
 export function signSeoRequest(body: string, key: string, time: string, nonce: string) {
   return createHmac('sha256', key).update(`${time}\n${nonce}\n${body}`).digest('hex');
 }
-export async function seoConnector(input: z.infer<typeof seoInput>) {
+export async function readSeoKey() {
   const key = (await readFile(join(homedir(), '.config/umami-zhodiao.key'), 'utf8')).trim();
   if (!/^[a-f0-9]{64}$/.test(key)) throw new Error('connector-not-configured');
+  return key;
+}
+export function validSeoEvidenceSignature(request: Request, key: string, now = Date.now()) {
+  const time = request.headers.get('x-umami-time') || '';
+  const nonce = request.headers.get('x-umami-nonce') || '';
+  const signature = request.headers.get('x-umami-signature') || '';
+  if (
+    !/^\d{10}$/.test(time) ||
+    Math.abs(now / 1000 - Number(time)) > 60 ||
+    !/^[a-f0-9]{32}$/.test(nonce) ||
+    !/^[a-f0-9]{64}$/.test(signature)
+  )
+    return false;
+  const expected = signSeoRequest(`evidence:${SEO_WEBSITE_ID}`, key, time, nonce);
+  return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signature, 'hex'));
+}
+export async function seoConnector(input: z.infer<typeof seoInput>) {
+  const key = await readSeoKey();
   const body = JSON.stringify(input);
   const time = Math.floor(Date.now() / 1000).toString();
   const nonce = randomBytes(16).toString('hex');

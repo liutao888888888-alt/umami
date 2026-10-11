@@ -1,9 +1,12 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, expect, test, vi } from 'vitest';
+
 vi.mock('@/lib/prisma', () => ({ default: { client: {} } }));
 vi.mock('@/lib/crypto', () => ({ decrypt: vi.fn(), encrypt: vi.fn(), secret: vi.fn() }));
+
 import {
   getExternalOverview,
+  getZhodiaoSearchEvidence,
   integrationInput,
   mergeIntegrationConfig,
   publicIntegrationConfig,
@@ -153,4 +156,16 @@ test('OAuth credentials are redacted and replacing clients resets the prior gran
       }),
     }),
   ).toThrow('invalid-redirect-uri');
+});
+
+test('SEO evidence refuses a different domain resource without contacting Google', async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  const result = await getZhodiaoSearchEvidence({
+    sites: {
+      [id]: { gaPropertyId: '', cloudflareZoneId: '', searchConsoleSite: 'sc-domain:fusedots.com' },
+    },
+  });
+  expect(result.status).toBe('not-configured');
+  expect(fetch).not.toHaveBeenCalled();
 });

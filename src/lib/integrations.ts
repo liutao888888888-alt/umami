@@ -333,3 +333,64 @@ export async function getExternalOverview(
   ]);
   return { range, ga4, searchConsole, cloudflare };
 }
+
+// Read page/query evidence only for the pilot's own, explicitly configured Search Console resource.
+export async function getZhodiaoSearchEvidence(config: IntegrationConfig) {
+  const range = reportingRange(28);
+  const site = config.sites['c395acfd-518e-4689-9839-d46651e7320e']?.searchConsoleSite;
+  if (!['https://zhodiao.com/', 'sc-domain:zhodiao.com'].includes(site || ''))
+    return { status: 'not-configured', range, rows: [] };
+  try {
+    const token = await googleToken(config, 'https://www.googleapis.com/auth/webmasters.readonly');
+    const result = await requestJson(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(site)}/searchAnalytics/query`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: range.start,
+          endDate: range.end,
+          type: 'web',
+          dataState: 'final',
+          dimensions: ['page', 'query'],
+          rowLimit: 1000,
+        }),
+      },
+    );
+    const rows = z
+      .array(
+        z.object({
+          keys: z.tuple([z.string().max(2000), z.string().max(300)]),
+          clicks: z.number().nonnegative(),
+          impressions: z.number().nonnegative(),
+          ctr: z.number().nonnegative(),
+          position: z.number().nonnegative(),
+        }),
+      )
+      .max(1000)
+      .parse(result.rows || []);
+    return {
+      status: 'connected',
+      range,
+      rows: rows
+        .filter(row => {
+          try {
+            const u = new URL(row.keys[0]);
+            return u.origin === 'https://zhodiao.com';
+          } catch {
+            return false;
+          }
+        })
+        .map(row => ({
+          page: row.keys[0],
+          query: row.keys[1],
+          clicks: row.clicks,
+          impressions: row.impressions,
+          ctr: row.ctr,
+          position: row.position,
+        })),
+    };
+  } catch {
+    return { status: 'error', range, rows: [] };
+  }
+}

@@ -75,3 +75,18 @@ test('signature binds timestamp, nonce and body', () => {
   expect(signSeoRequest('{"action":"scan"}', key, '124', 'abc')).not.toBe(valid);
   expect(signSeoRequest('{"action":"scan"}', key, '123', 'def')).not.toBe(valid);
 });
+
+test('worker evidence signature is scoped and expires in 60 seconds', async () => {
+  const { validSeoEvidenceSignature } = await import('./seo-connector');
+  const key = 'a'.repeat(64),
+    now = Date.now(),
+    time = Math.floor(now / 1000).toString(),
+    nonce = 'b'.repeat(32);
+  const signature = signSeoRequest(`evidence:${SEO_WEBSITE_ID}`, key, time, nonce);
+  const request = new Request(`${origin}/api/integrations/seo/evidence`, {
+    headers: { 'x-umami-time': time, 'x-umami-nonce': nonce, 'x-umami-signature': signature },
+  });
+  expect(validSeoEvidenceSignature(request, key, now)).toBe(true);
+  expect(validSeoEvidenceSignature(request, key, now + 61000)).toBe(false);
+  expect(validSeoEvidenceSignature(request, 'c'.repeat(64), now)).toBe(false);
+});
