@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useApi } from '@/components/hooks';
+import { formatSiteTime } from '@/lib/site-time';
 import styles from './OverviewPage.module.css';
 
 const labels: Record<string, string> = {
@@ -205,9 +206,8 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
           </p>
           <p>
             最近完整检查：
-            {data.lastScan ? new Date(data.lastScan).toLocaleString('zh-CN') : '尚未完成'} ·
-            下次自动检查：
-            {data.nextRun ? new Date(data.nextRun).toLocaleString('zh-CN') : '尚未排期'}
+            {data.lastScan ? formatSiteTime(data.lastScan, websiteId) : '尚未完成'} · 下次自动检查：
+            {data.nextRun ? formatSiteTime(data.nextRun, websiteId) : '尚未排期'}
           </p>
           <p>
             建议依据页面正文、前台检查及有效的站点分析证据。Trends
@@ -215,11 +215,12 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
           </p>
           {data.lastError && <p role="alert">{data.lastError}</p>}
           <p>
-            每天北京时间 09:00 开始检查，后台每 5 分钟分批处理排队页面；完成时间取决于页面数量。
+            每天美国东部时间（纽约）09:00 开始检查，自动适应夏令时，后台每 5
+            分钟分批处理排队页面；完成时间取决于页面数量。
           </p>
           {data.evidence && (
             <p>
-              分析证据更新时间：{new Date(data.evidence.fetchedAt).toLocaleString('zh-CN')} · Search
+              分析证据更新时间：{formatSiteTime(data.evidence.fetchedAt, websiteId)} · Search
               Console：
               {data.evidence.searchStatus === 'connected'
                 ? `已读取 ${data.evidence.searchRows} 行页面与查询数据`
@@ -252,7 +253,7 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
                 <a href={t.url} target="_blank" rel="noreferrer">
                   打开原页面
                 </a>{' '}
-                · {new Date(t.createdAt).toLocaleString('zh-CN')}
+                · {formatSiteTime(t.createdAt, websiteId)}
               </p>
               <p>检查依据：{t.issues.join('；')}</p>
               {t.evidence && (
@@ -277,7 +278,7 @@ export function SeoPanel({ websiteId }: { websiteId: string }) {
               <p>{t.message}</p>
               {t.appliedAt && (
                 <p>
-                  应用时间：{new Date(t.appliedAt).toLocaleString('zh-CN')} · 执行方式：
+                  应用时间：{formatSiteTime(t.appliedAt, websiteId)} · 执行方式：
                   {t.actor === 'automatic' ? '自动' : '管理员'}
                 </p>
               )}

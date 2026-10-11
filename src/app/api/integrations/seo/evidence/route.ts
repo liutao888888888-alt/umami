@@ -6,6 +6,7 @@ import {
 import prisma from '@/lib/prisma';
 import { forbidden, notFound, serverError } from '@/lib/response';
 import { readSeoKey, SEO_WEBSITE_ID, validSeoEvidenceSignature } from '@/lib/seo-connector';
+import { rangeBoundaries, ZHODIAO_TIMEZONE } from '@/lib/site-time';
 import { getPageviewMetrics } from '@/queries/sql';
 
 // A fixed, signed read-only channel for the site's scheduled worker; no user token or arbitrary provider IDs.
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
       select: { domain: true },
     });
     if (website?.domain !== 'zhodiao.com') return notFound();
-    const range = reportingRange(28);
+    const range = reportingRange(28, new Date(), ZHODIAO_TIMEZONE);
     const search = await getZhodiaoSearchEvidence(await readIntegrationConfig());
     let behavior: { status: string; rows: { page: string; visitors: number }[] } = {
       status: 'error',
@@ -27,11 +28,7 @@ export async function GET(request: Request) {
       const rows = await getPageviewMetrics(
         SEO_WEBSITE_ID,
         { type: 'path', limit: 1000 },
-        {
-          startDate: new Date(`${range.start}T00:00:00Z`),
-          endDate: new Date(new Date(`${range.until}T00:00:00Z`).getTime() - 1),
-          timezone: 'UTC',
-        },
+        rangeBoundaries(range, ZHODIAO_TIMEZONE),
       );
       behavior = {
         status: 'connected',

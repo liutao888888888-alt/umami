@@ -11,6 +11,7 @@ import {
 import prisma from '@/lib/prisma';
 import { parseRequest } from '@/lib/request';
 import { badRequest, forbidden, notFound, serverError } from '@/lib/response';
+import { rangeBoundaries, siteTimezone } from '@/lib/site-time';
 import { getWebsiteStats } from '@/queries/sql';
 
 const querySchema = z.object({
@@ -42,11 +43,10 @@ export async function GET(request: Request) {
     const external = await getExternalOverview(config, website.id, Number(query.days));
     let umami: any;
     try {
-      const stats: any = await getWebsiteStats(website.id, {
-        startDate: new Date(`${external.range.start}T00:00:00Z`),
-        endDate: new Date(new Date(`${external.range.until}T00:00:00Z`).getTime() - 1),
-        timezone: 'UTC',
-      });
+      const stats: any = await getWebsiteStats(
+        website.id,
+        rangeBoundaries(external.range, siteTimezone(website.id)),
+      );
       umami = {
         status: 'connected',
         metrics: {
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
           visits: Number(stats.visits),
           views: Number(stats.pageviews),
         },
-        timezone: 'UTC',
+        timezone: siteTimezone(website.id),
       };
     } catch {
       umami = { status: 'error', message: '暂时无法读取 Umami 数据，请稍后刷新。' };

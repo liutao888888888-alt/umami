@@ -2,6 +2,7 @@ import { createPrivateKey, sign } from 'node:crypto';
 import { z } from 'zod';
 import { decrypt, encrypt, secret } from '@/lib/crypto';
 import prisma from '@/lib/prisma';
+import { calendarDay, siteTimezone, ZHODIAO_TIMEZONE } from '@/lib/site-time';
 
 const KEY = 'website-integrations-v1';
 const siteSchema = z.object({
@@ -208,8 +209,8 @@ async function source(run: () => Promise<SourceResult>): Promise<SourceResult> {
   }
 }
 
-export function reportingRange(days: number, now = new Date()) {
-  const until = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+export function reportingRange(days: number, now = new Date(), timezone = 'UTC') {
+  const until = new Date(`${calendarDay(now, timezone)}T00:00:00Z`);
   const start = new Date(until.getTime() - days * 86400000);
   const end = new Date(until.getTime() - 86400000);
   return {
@@ -225,7 +226,7 @@ export async function getExternalOverview(
   days: number,
 ) {
   const site = config.sites[websiteId];
-  const range = reportingRange(days);
+  const range = reportingRange(days, new Date(), siteTimezone(websiteId));
   const [ga4, searchConsole, cloudflare] = await Promise.all([
     !(config.google || config.googleOAuth?.refreshToken) || !site?.gaPropertyId
       ? missing('填写 GA4 属性 ID 并连接 Google 只读账号。')
@@ -336,7 +337,7 @@ export async function getExternalOverview(
 
 // Read page/query evidence only for the pilot's own, explicitly configured Search Console resource.
 export async function getZhodiaoSearchEvidence(config: IntegrationConfig) {
-  const range = reportingRange(28);
+  const range = reportingRange(28, new Date(), ZHODIAO_TIMEZONE);
   const site = config.sites['c395acfd-518e-4689-9839-d46651e7320e']?.searchConsoleSite;
   if (!['https://zhodiao.com/', 'sc-domain:zhodiao.com'].includes(site || ''))
     return { status: 'not-configured', range, rows: [] };

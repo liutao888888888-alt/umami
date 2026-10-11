@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/common/Link';
 import { useApi, useLoginQuery } from '@/components/hooks';
 import type { SourceResult } from '@/lib/integrations';
+import { formatSiteTime } from '@/lib/site-time';
 import styles from './OverviewPage.module.css';
 import { SeoPanel } from './SeoPanel';
 import { TrendsPanel } from './TrendsPanel';
@@ -359,7 +360,7 @@ export function OverviewPage({ websiteId }: { websiteId: string }) {
             </section>
           )}
           <p className={styles.note}>
-            读取时间：{new Date(data.fetchedAt).toLocaleString('zh-CN')} · Cloudflare
+            读取时间：{formatSiteTime(data.fetchedAt, websiteId)} · Cloudflare
             数据可能经过采样，历史范围和指标受套餐限制。
           </p>
         </>

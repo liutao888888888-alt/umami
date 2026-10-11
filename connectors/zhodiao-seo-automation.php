@@ -7,11 +7,12 @@
 if (!defined('ABSPATH')) exit;
 final class Zhodiao_Umami_SEO {
  const SITE='c395acfd-518e-4689-9839-d46651e7320e', STATE='zum_seo_state_v1', LOCK='zum_seo_lock', HOOK='zum_seo_daily', JOB='zum_seo_job';
+ const TIMEZONE='America/New_York';
  const FIELDS=array('_genesis_title','_genesis_description','zhodiao_seo_title','zhodiao_meta_description');
  static function init(){
   add_action('rest_api_init',function(){register_rest_route('umami-seo/v1','/bridge',array('methods'=>'POST','callback'=>array(__CLASS__,'bridge'),'permission_callback'=>array(__CLASS__,'authenticate')));});
   add_action(self::HOOK,array(__CLASS__,'daily')); add_action(self::JOB,array(__CLASS__,'run'));
-  add_action('init',function(){if(!wp_next_scheduled(self::HOOK))wp_schedule_event(strtotime('tomorrow 01:00 UTC'),'daily',self::HOOK);$s=self::state();if($s['running']&&!wp_next_scheduled(self::JOB))self::schedule();});
+  add_action('init',function(){if(get_option('zum_seo_timezone')!==self::TIMEZONE){wp_clear_scheduled_hook(self::HOOK);update_option('zum_seo_timezone',self::TIMEZONE,false);}if(!wp_next_scheduled(self::HOOK))self::schedule_daily();$s=self::state();if($s['running']&&!wp_next_scheduled(self::JOB))self::schedule();});
  }
  static function state(){return wp_parse_args((array)get_option(self::STATE,array()),array('enabled'=>false,'tasks'=>array(),'pages'=>array(),'queue'=>array(),'running'=>false,'lastScan'=>null,'lastError'=>'','searchEvidence'=>array(),'searchSyncedAt'=>null,'aiAttempts'=>0,'evidence'=>null,'evidencePrepared'=>false,'evidenceHistory'=>array(),'keywordTargets'=>array('fuse bead patterns','perler bead patterns','fuse bead ideas','fuse bead pegboards','how to iron fuse beads')));}
  static function save($s){update_option(self::STATE,$s,false);}
@@ -66,11 +67,14 @@ final class Zhodiao_Umami_SEO {
   $s=self::state();$ai=class_exists('Zhodiao_DeepSeek_Publisher')?Zhodiao_DeepSeek_Publisher::settings():array();
   $tasks=array_slice(array_reverse($s['tasks']),0,100);
   foreach($tasks as &$t){unset($t['snapshot']);}unset($t);
-  return array('websiteId'=>self::SITE,'domain'=>'zhodiao.com','enabled'=>$s['enabled'],'running'=>$s['running'],'remaining'=>count($s['queue']),'lastScan'=>$s['lastScan'],'lastError'=>$s['lastError'],'pages'=>$s['pages'],'tasks'=>$tasks,'searchSyncedAt'=>$s['searchSyncedAt'],'keywords'=>self::keyword_analysis($s),'evidence'=>isset($s['evidence'])?array('fetchedAt'=>$s['evidence']['fetchedAt'],'range'=>$s['evidence']['range'],'searchStatus'=>$s['evidence']['search']['status'],'searchRows'=>count($s['evidence']['search']['rows']),'behaviorStatus'=>$s['evidence']['behavior']['status'],'behaviorRows'=>count($s['evidence']['behavior']['rows'])):null,'aiConfigured'=>!empty($ai['api_key']),'model'=>$ai['model']??'', 'nextRun'=>wp_next_scheduled(self::HOOK)?gmdate('c',wp_next_scheduled(self::HOOK)):null,'limits'=>array('daily'=>3,'cooldownDays'=>28),'publisher'=>array('enabled'=>!empty($ai['enabled']),'scheduled'=>class_exists('Zhodiao_DeepSeek_Publisher')?Zhodiao_DeepSeek_Publisher::queue_count():0));
+  return array('websiteId'=>self::SITE,'domain'=>'zhodiao.com','enabled'=>$s['enabled'],'running'=>$s['running'],'remaining'=>count($s['queue']),'lastScan'=>$s['lastScan'],'lastError'=>$s['lastError'],'pages'=>$s['pages'],'tasks'=>$tasks,'searchSyncedAt'=>$s['searchSyncedAt'],'keywords'=>self::keyword_analysis($s),'evidence'=>isset($s['evidence'])?array('fetchedAt'=>$s['evidence']['fetchedAt'],'range'=>$s['evidence']['range'],'searchStatus'=>$s['evidence']['search']['status'],'searchRows'=>count($s['evidence']['search']['rows']),'behaviorStatus'=>$s['evidence']['behavior']['status'],'behaviorRows'=>count($s['evidence']['behavior']['rows'])):null,'aiConfigured'=>!empty($ai['api_key']),'model'=>$ai['model']??'', 'nextRun'=>wp_next_scheduled(self::HOOK)?gmdate('c',wp_next_scheduled(self::HOOK)):null,'timezone'=>self::TIMEZONE,'limits'=>array('daily'=>3,'cooldownDays'=>28),'publisher'=>array('enabled'=>!empty($ai['enabled']),'scheduled'=>class_exists('Zhodiao_DeepSeek_Publisher')?Zhodiao_DeepSeek_Publisher::queue_count():0));
  }
  static function ids(){return get_posts(array('post_type'=>array('post','page'),'post_status'=>'publish','posts_per_page'=>100,'orderby'=>'modified','order'=>'DESC','fields'=>'ids'));}
  static function schedule(){if(!wp_next_scheduled(self::JOB))wp_schedule_single_event(time()+5,self::JOB);spawn_cron();}
- static function daily(){self::locked(function(){$s=self::state();if(!$s['enabled']||$s['running'])return;$s['queue']=self::ids();$s['running']=true;$s['pages']=array();$s['aiAttempts']=0;$s['evidencePrepared']=false;$s['lastError']='';self::save($s);self::schedule();});}
+ static function next_daily($now=null){$now=$now??time();$local=(new DateTimeImmutable('@'.$now))->setTimezone(new DateTimeZone(self::TIMEZONE));$next=$local->setTime(9,0);if($next->getTimestamp()<=$now)$next=$next->modify('+1 day');return $next->getTimestamp();}
+ static function schedule_daily(){if(!wp_next_scheduled(self::HOOK))wp_schedule_single_event(self::next_daily(),self::HOOK);}
+ static function local_day($value=null){return (new DateTimeImmutable($value??'now'))->setTimezone(new DateTimeZone(self::TIMEZONE))->format('Y-m-d');}
+ static function daily(){self::schedule_daily();self::locked(function(){$s=self::state();if(!$s['enabled']||$s['running'])return;$s['queue']=self::ids();$s['running']=true;$s['pages']=array();$s['aiAttempts']=0;$s['evidencePrepared']=false;$s['lastError']='';self::save($s);self::schedule();});}
  static function url($id){$u=set_url_scheme(get_permalink($id),'https');$p=wp_parse_url($u);return ($p['host']??'')==='zhodiao.com'&&empty($p['port'])?$u:false;}
  static function fields($id){$f=array();foreach(self::FIELDS as $k)$f[$k]=array('exists'=>metadata_exists('post',$id,$k),'value'=>get_post_meta($id,$k,true));return $f;}
  static function fingerprint($id){$p=get_post($id);return hash('sha256',wp_json_encode(array($p->post_content,$p->post_title,$p->post_status,$p->post_modified_gmt,self::fields($id))));}
@@ -84,7 +88,7 @@ final class Zhodiao_Umami_SEO {
   return array('title'=>trim($x->evaluate('string(//title)')),'description'=>$descs->length?$descs->item(0)->getAttribute('content'):'','descriptionCount'=>$descs->length,'h1Count'=>$x->query('//h1')->length,'noindex'=>$robots->length&&strpos($robots->item(0)->getAttribute('content'),'noindex')!==false,'canonical'=>$canon->length?$canon->item(0)->getAttribute('href'):'');
  }
  static function issues($h){$a=array();$len=mb_strlen($h['title']);if($len<15||$len>75)$a[]='标题长度需要检查';$len=mb_strlen($h['description']);if($len<70||$len>180)$a[]='摘要缺失或长度需要检查';if($h['descriptionCount']>1)$a[]='存在重复摘要标签';if($h['h1Count']!==1)$a[]='H1 数量需要审核';if($h['noindex'])$a[]='页面设为不收录，需审核';if(!$h['canonical'])$a[]='Canonical 缺失，需审核';return $a;}
- static function today_count($s){return count(array_filter($s['tasks'],function($t){return ($t['appliedAt']??'')&&substr($t['appliedAt'],0,10)===gmdate('Y-m-d');}));}
+ static function today_count($s){return count(array_filter($s['tasks'],function($t){return ($t['appliedAt']??'')&&self::local_day($t['appliedAt'])===self::local_day();}));}
  static function record(&$s,$t){foreach($s['tasks'] as $i=>$old)if($old['id']===$t['id']){$s['tasks'][$i]=$t;return;}$s['tasks'][]=$t;}
  static function recent($s,$id){foreach($s['tasks'] as $t)if($t['pageId']===$id&&(in_array($t['status'],array('pending','executing','verification-failed'),true)||(!empty($t['appliedAt'])&&strtotime($t['appliedAt'])>time()-28*DAY_IN_SECONDS)))return true;return false;}
  static function refresh_evidence(&$s){
@@ -93,7 +97,7 @@ final class Zhodiao_Umami_SEO {
   $r=wp_remote_get('https://darkorange-tiger-652673.hostingersite.com/api/integrations/seo/evidence',array('timeout'=>30,'redirection'=>0,'limit_response_size'=>600000,'headers'=>array('X-Umami-Time'=>$ts,'X-Umami-Nonce'=>$nonce,'X-Umami-Signature'=>$sig)));
   if(is_wp_error($r)||wp_remote_retrieve_response_code($r)!==200){$s['lastError']='本轮分析数据未刷新，使用有效期内证据或仅做页面检查。';return;}
   $e=json_decode(wp_remote_retrieve_body($r),true);if(!is_array($e)||($e['websiteId']??'')!==self::SITE||($e['domain']??'')!=='zhodiao.com')return;
-  $s['evidence']=$e;$s['evidenceHistory'][gmdate('Y-m-d')]=$e;
+  $s['evidence']=$e;$s['evidenceHistory'][self::local_day()]=$e;
   if(($e['search']['status']??'')==='connected'){$s['searchEvidence']=array_slice((array)$e['search']['rows'],0,1000);$s['searchSyncedAt']=$e['fetchedAt'];}
  }
  static function keyword_analysis($s){
