@@ -1,11 +1,12 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
+import { z } from 'zod';
 import { checkAuth, getBearerToken } from '@/lib/auth';
 import { decrypt, encrypt, hash, secret } from '@/lib/crypto';
 import {
+  type IntegrationConfig,
   readIntegrationConfig,
   writeIntegrationConfig,
-  type IntegrationConfig,
 } from '@/lib/integrations';
 
 export const GOOGLE_SCOPES = [
@@ -20,7 +21,12 @@ const fingerprint = (c: NonNullable<IntegrationConfig['googleOAuth']>) =>
   hash(`${c.clientId}:${c.clientSecret}:${c.redirectUri}`);
 export const adminSession = (auth: any) => auth?.user?.isAdmin && auth.authType === 'session';
 
-export async function beginGoogleOAuth(request: Request, config: IntegrationConfig) {
+export async function beginGoogleOAuth(
+  request: Request,
+  config: IntegrationConfig,
+  websiteId?: string,
+) {
+  if (websiteId !== undefined) z.uuid().parse(websiteId);
   const c = config.googleOAuth;
   if (!c) throw new Error('not-configured');
   // Only the configured app origin may initiate a browser-bound authorization.
@@ -35,6 +41,7 @@ export async function beginGoogleOAuth(request: Request, config: IntegrationConf
   const verifier = await client.generateCodeVerifierAsync();
   const state = randomBytes(32).toString('base64url');
   const pending = {
+    websiteId,
     state,
     verifier: verifier.codeVerifier,
     authToken: getBearerToken(request),
@@ -81,6 +88,7 @@ export async function finishGoogleOAuth(request: Request) {
   // The pending cookie contains the existing session, is browser-bound, short-lived,
   // encrypted and HttpOnly. Revalidate that session and admin rights before saving.
   let outcome = 'failed';
+  let returnPath = '/websites';
   try {
     const value = request.headers
       .get('cookie')
@@ -102,6 +110,10 @@ export async function finishGoogleOAuth(request: Request) {
       new Request(request.url, { headers: { authorization: `Bearer ${pending.authToken}` } }),
     );
     if (!adminSession(auth)) throw new Error('invalid-session');
+    if (pending.websiteId !== undefined) {
+      const websiteId = z.uuid().parse(pending.websiteId);
+      returnPath = `/websites/${websiteId}/overview`;
+    }
     const config = await readIntegrationConfig();
     const c = config.googleOAuth;
     if (!c || fingerprint(c) !== pending.fingerprint) throw new Error('config-changed');
@@ -137,7 +149,7 @@ export async function finishGoogleOAuth(request: Request) {
   return new Response(null, {
     status: 303,
     headers: {
-      Location: `/overview?google=${outcome}`,
+      Location: `${returnPath}?google=${outcome}`,
       'Set-Cookie': cookieHeader('', 0),
       'Cache-Control': 'private, no-store',
       'Referrer-Policy': 'no-referrer',

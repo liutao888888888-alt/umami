@@ -4,6 +4,7 @@ import {
   Clock,
   Eye,
   Flame,
+  LayoutDashboard,
   Sheet,
   Tag,
   User,
@@ -11,11 +12,13 @@ import {
   Video,
 } from '@/components/icons';
 import { Funnel, Gauge, Lightning, Magnet, Money, Network, Path, Target } from '@/components/svg';
+import { useLoginQuery } from './queries/useLoginQuery';
 import { useMessages } from './useMessages';
 import { useNavigation } from './useNavigation';
 
 export function useWebsiteNavItems(websiteId: string) {
   const { t, labels } = useMessages();
+  const { user } = useLoginQuery();
   const { pathname, renderUrl } = useNavigation();
   const resetParams = {
     search: undefined,
@@ -36,6 +39,16 @@ export function useWebsiteNavItems(websiteId: string) {
     {
       label: t(labels.traffic),
       items: [
+        ...(user?.isAdmin
+          ? [
+              {
+                id: 'website-overview',
+                label: '网站总览',
+                icon: <LayoutDashboard />,
+                path: renderPath('/overview'),
+              },
+            ]
+          : []),
         {
           id: 'overview',
           label: t(labels.overview),

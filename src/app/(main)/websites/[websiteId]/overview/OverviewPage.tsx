@@ -12,10 +12,9 @@ const number = (v: number) =>
 const percent = (v: number) => `${number(v * 100)}%`;
 const bytes = (v: number) => `${number(v / 1024 / 1024)} MB`;
 
-export function OverviewPage() {
+export function OverviewPage({ websiteId }: { websiteId: string }) {
   const { user } = useLoginQuery();
   const { get, post, useQuery } = useApi();
-  const [websiteId, setWebsiteId] = useState('');
   const [days, setDays] = useState('7');
   const [setup, setSetup] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,9 +42,6 @@ export function OverviewPage() {
     setGoogleResult(new URLSearchParams(window.location.search).get('google') || '');
     setOrigin(window.location.origin);
   }, []);
-  useEffect(() => {
-    if (!websiteId && config.data?.websites?.length) setWebsiteId(config.data.websites[0].id);
-  }, [config.data, websiteId]);
   useEffect(() => {
     setSite({ ...emptySite, ...config.data?.sites?.[websiteId] });
     setNotice('');
@@ -79,7 +75,7 @@ export function OverviewPage() {
     setConnecting(true);
     setNotice('');
     try {
-      const { url } = await post('/integrations/google', {});
+      const { url } = await post('/integrations/google', { websiteId });
       const target = new URL(url);
       if (target.origin !== 'https://accounts.google.com') throw new Error('授权地址无效。');
       window.location.assign(target.href);
@@ -102,25 +98,15 @@ export function OverviewPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>UMAMI · 网站运营</span>
+          <span className={styles.eyebrow}>{selected?.domain} · 网站运营</span>
           <h1>网站总览</h1>
-          <p>访问、搜索表现与网络健康，在一处查看。</p>
+          <p>查看 {selected?.domain} 的访问、搜索表现与网络健康。</p>
         </div>
         <button onClick={() => setSetup(!setup)} aria-expanded={setup}>
           接入设置
         </button>
       </header>
       <div className={styles.toolbar}>
-        <label>
-          网站
-          <select value={websiteId} onChange={e => setWebsiteId(e.target.value)} disabled={saving}>
-            {(config.data?.websites || []).map((w: any) => (
-              <option key={w.id} value={w.id}>
-                {w.name} · {w.domain}
-              </option>
-            ))}
-          </select>
-        </label>
         <label>
           统计范围
           <select value={days} onChange={e => setDays(e.target.value)}>
@@ -136,7 +122,9 @@ export function OverviewPage() {
       </div>
       {config.isLoading && <p role="status">正在读取网站列表…</p>}
       {config.error && <p role="alert">无法读取接入设置，请重新登录或稍后刷新。</p>}
-      {config.data?.websites?.length === 0 && <p>请先在「网站」中添加监控项目。</p>}
+      {config.data && !selected && (
+        <p role="alert">此网站不存在或已删除，请返回 Websites 选择网站。</p>
+      )}
       {googleResult && (
         <p role="status">
           {googleResult === 'connected'
@@ -244,8 +232,8 @@ export function OverviewPage() {
               <fieldset>
                 <legend>Cloudflare</legend>
                 <p>
-                  创建只读 API 令牌，权限为「Zone → Analytics → Read」，资源仅包含 fusedots.com 和
-                  zhodiao.com。Zone ID 可在对应网站的 Cloudflare 概览页找到。
+                  创建只读 API 令牌，权限为「Zone → Analytics → Read」，资源仅包含{' '}
+                  {selected?.domain}。 Zone ID 可在该网站的 Cloudflare 概览页找到。
                 </p>
                 <label>
                   Zone ID

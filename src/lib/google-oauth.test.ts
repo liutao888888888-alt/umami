@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
-import { beforeEach, afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), write: vi.fn() }));
 vi.mock('@/lib/auth', () => ({
   checkAuth: mocks.auth,
@@ -13,8 +14,10 @@ vi.mock('@/lib/crypto', async original => ({
   ...(await original<any>()),
   secret: () => 'test-encryption-secret',
 }));
-import { beginGoogleOAuth, finishGoogleOAuth, GOOGLE_SCOPES } from './google-oauth';
+
 import { POST } from '@/app/api/integrations/google/route';
+import { beginGoogleOAuth, finishGoogleOAuth, GOOGLE_SCOPES } from './google-oauth';
+
 const config = () => ({
   sites: {},
   googleOAuth: {
@@ -34,8 +37,8 @@ beforeEach(() => {
   mocks.read.mockImplementation(async () => config());
 });
 afterEach(() => vi.restoreAllMocks());
-async function callback(stateOverride?: string) {
-  const start = await beginGoogleOAuth(request(), config());
+async function callback(stateOverride?: string, websiteId?: string) {
+  const start = await beginGoogleOAuth(request(), config(), websiteId);
   const { url } = await start.json();
   const state = stateOverride ?? new URL(url).searchParams.get('state');
   return new Request(`${config().googleOAuth.redirectUri}?state=${state}&code=one-time-code`, {
@@ -72,7 +75,7 @@ test.each([
 test('wrong state cannot exchange the code or persist credentials', async () => {
   const exchange = vi.spyOn(OAuth2Client.prototype, 'getToken');
   const response = await finishGoogleOAuth(await callback('wrong-state'));
-  expect(response.headers.get('location')).toBe('/overview?google=failed');
+  expect(response.headers.get('location')).toBe('/websites?google=failed');
   expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
   expect(exchange).not.toHaveBeenCalled();
   expect(mocks.write).not.toHaveBeenCalled();
@@ -80,14 +83,14 @@ test('wrong state cannot exchange the code or persist credentials', async () => 
 test('expired pending authorization cannot save credentials', async () => {
   const req = await callback();
   const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 601000);
-  expect((await finishGoogleOAuth(req)).headers.get('location')).toBe('/overview?google=failed');
+  expect((await finishGoogleOAuth(req)).headers.get('location')).toBe('/websites?google=failed');
   expect(mocks.write).not.toHaveBeenCalled();
   now.mockRestore();
 });
 test('admin session is revalidated on callback', async () => {
   const req = await callback();
   mocks.auth.mockResolvedValue(null);
-  expect((await finishGoogleOAuth(req)).headers.get('location')).toBe('/overview?google=failed');
+  expect((await finishGoogleOAuth(req)).headers.get('location')).toBe('/websites?google=failed');
   expect(mocks.write).not.toHaveBeenCalled();
 });
 test('callback persists refresh token only after PKCE exchange and both scopes, without returning secrets', async () => {
@@ -107,7 +110,7 @@ test('callback persists refresh token only after PKCE exchange and both scopes, 
       googleOAuth: expect.objectContaining({ refreshToken: 'never-return-refresh-token' }),
     }),
   );
-  expect(response.headers.get('location')).toBe('/overview?google=connected');
+  expect(response.headers.get('location')).toBe('/websites?google=connected');
   expect(response.headers.get('referrer-policy')).toBe('no-referrer');
   expect(await response.text()).not.toContain('never-return-refresh-token');
 });
@@ -116,7 +119,16 @@ test('partial consent does not create a misleading connected status', async () =
     tokens: { refresh_token: 'secret', scope: GOOGLE_SCOPES[0] },
   } as any);
   expect((await finishGoogleOAuth(await callback())).headers.get('location')).toBe(
-    '/overview?google=failed',
+    '/websites?google=failed',
   );
   expect(mocks.write).not.toHaveBeenCalled();
+});
+test('authorization returns to the initiating website and rejects arbitrary redirect destinations', async () => {
+  const websiteId = '80b20e16-7d9a-44f5-b368-e9ab5b176cd9';
+  vi.spyOn(OAuth2Client.prototype, 'getToken').mockResolvedValue({
+    tokens: { refresh_token: 'secret', scope: GOOGLE_SCOPES.join(' ') },
+  } as any);
+  const response = await finishGoogleOAuth(await callback(undefined, websiteId));
+  expect(response.headers.get('location')).toBe(`/websites/${websiteId}/overview?google=connected`);
+  await expect(beginGoogleOAuth(request(), config(), '//attacker.invalid')).rejects.toThrow();
 });

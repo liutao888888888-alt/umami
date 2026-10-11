@@ -1,7 +1,5 @@
-import type { Metadata } from 'next';
-import { OverviewPage } from './OverviewPage';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <OverviewPage />;
+  redirect('/websites');
 }
-export const metadata: Metadata = { title: '网站总览' };

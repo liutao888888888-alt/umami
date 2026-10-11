@@ -38,6 +38,8 @@
 Google 外部应用处于 Testing 状态时，包含这些范围的刷新令牌通常在 7 天后失效，需要重新连接。长期自用应按 Google 的要求设置适当发布状态；OAuth 授权界面的权限和验证提示须由账号持有人审阅。
 # Google Trends keyword research
 
+The dashboard lives at `/websites/[websiteId]/overview`, reached through Websites → select a website → 网站总览. Desktop and mobile website navigation expose it only to administrators. There is no global website selector: the route ID determines the statistics, integration form, query suggestions and saved Trends preferences. The old `/overview` URL redirects to `/websites`. OAuth initiation stores the current website UUID in the encrypted browser-bound state, and the callback returns to that site's overview; it cannot accept arbitrary redirect URLs. Existing shared credentials and per-site provider IDs are preserved.
+
 The overview now includes an administrator-only Trends panel. It uses Google’s official cross-origin chart embeds (the iframe format from `embed_loader.js`), with a full-report fallback link. No third-party JavaScript executes in the Umami admin document, and no OAuth credentials or website IDs are included in Trends requests. A chart loads only after the administrator clicks Load / Update. Terms and region/time filters are then sent to Google.
 
 Compare one to five search terms, choose the market and a separate Trends period, view the time series and the first term’s related queries. Search Console query suggestions stay local until selected and loaded. Preferences are stored per administrator and website in this browser’s local storage, not shared across devices. Switching websites unmounts existing charts. No chart values are scraped or treated as absolute search volume, and no growth claims are inferred from the charts.
