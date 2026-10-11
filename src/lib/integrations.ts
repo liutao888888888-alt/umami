@@ -360,7 +360,7 @@ export async function getZhodiaoSearchEvidence(config: IntegrationConfig) {
     const rows = z
       .array(
         z.object({
-          keys: z.tuple([z.string().max(2000), z.string().max(300)]),
+          keys: z.tuple([z.string().max(8192), z.string().max(8192)]),
           clicks: z.number().nonnegative(),
           impressions: z.number().nonnegative(),
           ctr: z.number().nonnegative(),
@@ -383,7 +383,7 @@ export async function getZhodiaoSearchEvidence(config: IntegrationConfig) {
         })
         .map(row => ({
           page: row.keys[0],
-          query: row.keys[1],
+          query: row.keys[1].slice(0, 300),
           clicks: row.clicks,
           impressions: row.impressions,
           ctr: row.ctr,

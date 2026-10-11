@@ -190,22 +190,20 @@ test('SEO page/query response accepts valid Google numbers and empty query resul
       refreshToken: 'test-refresh',
     },
   };
-  const fetch = vi
-    .fn()
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        rows: [
-          {
-            keys: ['https://zhodiao.com/beads/', 'bead guide'],
-            clicks: 0,
-            impressions: 4,
-            ctr: 0,
-            position: 6.8,
-          },
-        ],
-      }),
-    });
+  const fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      rows: [
+        {
+          keys: ['https://zhodiao.com/beads/', 'bead guide'],
+          clicks: 0,
+          impressions: 4,
+          ctr: 0,
+          position: 6.8,
+        },
+      ],
+    }),
+  });
   vi.stubGlobal('fetch', fetch);
   const result = await getZhodiaoSearchEvidence(config);
   expect(result.status).toBe('connected');
@@ -214,6 +212,23 @@ test('SEO page/query response accepts valid Google numbers and empty query resul
     query: 'bead guide',
     impressions: 4,
   });
+  fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      rows: [
+        {
+          keys: ['https://zhodiao.com/beads/', 'q'.repeat(500)],
+          clicks: 0,
+          impressions: 1,
+          ctr: 0,
+          position: 7,
+        },
+      ],
+    }),
+  });
+  const longQuery = await getZhodiaoSearchEvidence(config);
+  expect(longQuery.status).toBe('connected');
+  expect(longQuery.rows[0].query).toHaveLength(300);
   fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
   expect((await getZhodiaoSearchEvidence(config)).status).toBe('connected');
 });
